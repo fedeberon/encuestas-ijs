@@ -2,6 +2,7 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { SurveyBarChart } from "./components/SurveyBarChart";
 
 const interestAreas = [
   "Tecnología y creatividad digital",
@@ -507,9 +508,9 @@ export default function Home() {
               <div className="stats-dashboard">
                 <div className="stat-card stat-card-blue"><span className="stat-symbol">◉</span><div><strong>{statsData.total}</strong><span>Encuestas cargadas</span></div></div>
                 <div className="stat-card stat-card-green"><span className="stat-symbol">▥</span><div><strong>{Object.keys(statsData.contact).length}</strong><span>Canales de contacto</span></div></div>
-                <section className="panel chart-panel"><h2>Áreas de mayor interés</h2><div className="bar-list">{statsData.areas.map((item) => <div className="bar-row" key={item.label}><span>{item.label}</span><div><i style={{ width: `${statsData.total ? Math.max((item.count / statsData.total) * 100, item.count ? 3 : 0) : 0}%` }} /><b>{item.count}</b></div></div>)}</div></section>
-                <section className="panel chart-panel"><h2>Carreras de mayor interés</h2><div className="bar-list">{statsData.carreras.map((item) => <div className="bar-row" key={item.label}><span>{item.label}</span><div><i style={{ width: `${statsData.total ? Math.max((item.count / statsData.total) * 100, item.count ? 3 : 0) : 0}%` }} /><b>{item.count}</b></div></div>)}</div></section>
-                <section className="panel chart-panel"><h2>Qué valoran en una carrera</h2><div className="bar-list">{statsData.valora.map((item) => <div className="bar-row" key={item.label}><span>{item.label}</span><div><i style={{ width: `${statsData.total ? Math.max((item.count / statsData.total) * 100, item.count ? 3 : 0) : 0}%` }} /><b>{item.count}</b></div></div>)}</div></section>
+                <section className="panel chart-panel"><h2>Áreas de mayor interés</h2><SurveyBarChart title="Áreas de mayor interés" items={statsData.areas} color="#378fe7" /></section>
+                <section className="panel chart-panel"><h2>Carreras de mayor interés</h2><SurveyBarChart title="Carreras de mayor interés" items={statsData.carreras} color="#26a878" /></section>
+                <section className="panel chart-panel"><h2>Qué valoran en una carrera</h2><SurveyBarChart title="Qué valoran en una carrera" items={statsData.valora} color="#f0a72b" /></section>
                 <section className="panel chart-panel compact-stats"><h2>Contacto</h2>{Object.entries(statsData.contact).map(([label, value]) => <div className="summary-row" key={label}><span>{label}</span><strong>{value}</strong></div>)}<h2 className="secondary-heading">Jornada informativa</h2>{Object.entries(statsData.visit).map(([label, value]) => <div className="summary-row" key={label}><span>{label}</span><strong>{value}</strong></div>)}</section>
               </div>
             )}
