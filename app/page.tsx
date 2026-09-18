@@ -393,7 +393,7 @@ export default function Home() {
             <span>Configuración</span>
           </button>
         </nav>
-        <div className="sidebar-user"><span className="user-avatar">{currentUser?.name?.slice(0, 1).toUpperCase() || "U"}</span><div><strong>{currentUser?.name || "Usuario"}</strong><span>{currentUser?.role || "Carga"}</span></div><button type="button" onClick={handleLogout} aria-label="Cerrar sesión" title="Cerrar sesión">↪</button></div>
+        <div className="sidebar-user"><span className="user-avatar">{currentUser?.name?.slice(0, 1).toUpperCase() || "U"}</span><div><strong>{currentUser?.name || "Usuario"}</strong><span>{currentUser?.role || "Carga"}</span></div><button type="button" onClick={handleLogout} aria-label="Cerrar sesión" title="Cerrar sesión"><span aria-hidden="true">↪</span> Salir</button></div>
         <div className="sidebar-footer">Carga manual<br /><span>Panel operativo</span></div>
       </aside>
 
