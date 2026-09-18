@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 
 const interestAreas = [
   "Tecnología y creatividad digital",
@@ -100,6 +101,50 @@ function OptionGroup({
   );
 }
 
+function LoginScreen({ onLogin }: { onLogin: (user: { name: string; role: string }) => void }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { error?: string; user?: { name: string; role: string } };
+      if (!response.ok || !result.user) throw new Error(result.error || "No se pudo iniciar sesión.");
+      onLogin(result.user);
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : "No se pudo iniciar sesión.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <main className="login-shell">
+      <section className="login-card">
+        <Image className="login-logo" src="/logo-instituto.png" alt="Instituto Jesús Sacramentado" width={125} height={150} priority />
+        <p className="login-kicker">DATA ENTRY</p>
+        <h1>Ingresar al sistema</h1>
+        <p className="login-subtitle">Carga y consulta de encuestas institucionales.</p>
+        <form onSubmit={handleSubmit} className="login-form">
+          <label className="field" htmlFor="login-username"><span>Usuario</span><input id="login-username" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" autoFocus placeholder="Ingresá tu usuario" /></label>
+          <label className="field" htmlFor="login-password"><span>Contraseña</span><input id="login-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" placeholder="Ingresá tu contraseña" /></label>
+          {error && <p className="login-error" role="alert">{error}</p>}
+          <button className="primary-button login-button" type="submit" disabled={isLoading}>{isLoading ? "INGRESANDO..." : "INGRESAR"}</button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
 export default function Home() {
   const [institution, setInstitution] = useState("");
   const [name, setName] = useState("");
@@ -116,13 +161,26 @@ export default function Home() {
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [dataError, setDataError] = useState("");
   const [search, setSearch] = useState("");
+  const [authStatus, setAuthStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
+  const [currentUser, setCurrentUser] = useState<{ name: string; role: string } | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const savedInstitution = window.localStorage.getItem("encuesta-institution");
     if (savedInstitution) window.requestAnimationFrame(() => setInstitution(savedInstitution));
-    nameRef.current?.focus();
+    fetch("/api/auth/me")
+      .then(async (response) => {
+        const result = (await response.json().catch(() => ({}))) as { user?: { name: string; role: string } };
+        if (!response.ok || !result.user) return setAuthStatus("unauthenticated");
+        setCurrentUser(result.user);
+        setAuthStatus("authenticated");
+      })
+      .catch(() => setAuthStatus("unauthenticated"));
   }, []);
+
+  useEffect(() => {
+    if (authStatus === "authenticated") nameRef.current?.focus();
+  }, [authStatus]);
 
   useEffect(() => {
     if (institution.trim()) window.localStorage.setItem("encuesta-institution", institution);
@@ -191,6 +249,12 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setCurrentUser(null);
+    setAuthStatus("unauthenticated");
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -252,11 +316,19 @@ export default function Home() {
     }
   };
 
+  if (authStatus === "loading") {
+    return <main className="login-shell"><div className="login-loading">Verificando sesión...</div></main>;
+  }
+
+  if (authStatus === "unauthenticated") {
+    return <LoginScreen onLogin={(user) => { setCurrentUser(user); setAuthStatus("authenticated"); }} />;
+  }
+
   return (
     <main className="app-layout">
       <aside className="sidebar">
         <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true">ISJ</div>
+          <Image className="brand-logo" src="/logo-instituto.png" alt="Logo Instituto Jesús Sacramentado" width={46} height={58} priority />
           <div>
             <strong>Instituto</strong>
             <strong>Jesús Sacramentado</strong>
@@ -285,6 +357,7 @@ export default function Home() {
             <span>Configuración</span>
           </button>
         </nav>
+        <div className="sidebar-user"><span className="user-avatar">{currentUser?.name?.slice(0, 1).toUpperCase() || "U"}</span><div><strong>{currentUser?.name || "Usuario"}</strong><span>{currentUser?.role || "Carga"}</span></div><button type="button" onClick={handleLogout} aria-label="Cerrar sesión" title="Cerrar sesión">↪</button></div>
         <div className="sidebar-footer">Carga manual<br /><span>Panel operativo</span></div>
       </aside>
 

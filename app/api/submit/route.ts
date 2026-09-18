@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getSession } from "../../../lib/auth";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,10 @@ type SubmitPayload = {
 };
 
 export async function POST(request: Request) {
+  if (!(await getSession())) {
+    return NextResponse.json({ error: "Sesión requerida." }, { status: 401 });
+  }
+
   const scriptUrl = process.env.GOOGLE_SCRIPT_URL;
   if (!scriptUrl) {
     return NextResponse.json({ error: "La integración con Google Sheets no está configurada." }, { status: 500 });

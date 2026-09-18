@@ -12,6 +12,7 @@
 
 const SPREADSHEET_ID = 'REEMPLAZAR_CON_EL_ID_DEL_SPREADSHEET';
 const SHEET_NAME = 'Cargas';
+const USERS_SHEET_NAME = 'Usuarios';
 
 const AREAS = [
   'Tecnología y creatividad digital',
@@ -93,6 +94,11 @@ function doPost(e) {
     }
 
     const data = JSON.parse(e.postData.contents);
+
+    if (data.action === 'login') {
+      return autenticarUsuario(data);
+    }
+
     validarEncuesta(data);
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -118,6 +124,46 @@ function doPost(e) {
   } catch (error) {
     return respuesta({ ok: false, error: error.toString() });
   }
+}
+
+function autenticarUsuario(data) {
+  const username = String(data.username || '').trim().toLowerCase();
+  const password = String(data.password || '');
+  if (!username || !password) return respuesta({ ok: false, error: 'Usuario y contraseña son obligatorios.' });
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
+  if (!usersSheet || usersSheet.getLastRow() < 2) {
+    return respuesta({ ok: false, error: 'La hoja Usuarios no está configurada.' });
+  }
+
+  const rows = usersSheet.getDataRange().getDisplayValues();
+  const headers = rows.shift().map(header => String(header).trim().toLowerCase());
+  const usernameIndex = headers.indexOf('usuario');
+  const passwordIndex = headers.indexOf('clave');
+  const nameIndex = headers.indexOf('nombre');
+  const roleIndex = headers.indexOf('rol');
+  const activeIndex = headers.indexOf('activo');
+
+  if (usernameIndex < 0 || passwordIndex < 0) {
+    return respuesta({ ok: false, error: 'Usuarios debe tener las columnas Usuario y Clave.' });
+  }
+
+  const user = rows.find(row => {
+    const active = activeIndex < 0 || ['si', 'sí', 'true', '1', 'activo'].includes(String(row[activeIndex]).trim().toLowerCase());
+    return active && String(row[usernameIndex]).trim().toLowerCase() === username && String(row[passwordIndex]) === password;
+  });
+
+  if (!user) return respuesta({ ok: false, error: 'Usuario o contraseña incorrectos.' });
+
+  return respuesta({
+    ok: true,
+    user: {
+      username: String(user[usernameIndex]),
+      name: nameIndex >= 0 ? String(user[nameIndex]) : String(user[usernameIndex]),
+      role: roleIndex >= 0 ? String(user[roleIndex] || 'Carga') : 'Carga'
+    }
+  });
 }
 
 function validarEncuesta(data) {
@@ -315,4 +361,11 @@ function configurarSpreadsheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   obtenerOCrearCargas(ss);
   actualizarEstadisticas(ss);
+
+  let users = ss.getSheetByName(USERS_SHEET_NAME);
+  if (!users) users = ss.insertSheet(USERS_SHEET_NAME);
+  if (users.getLastRow() === 0) {
+    users.appendRow(['Usuario', 'Clave', 'Nombre', 'Rol', 'Activo']);
+    users.getRange(1, 1, 1, 5).setFontWeight('bold').setBackground('#0d2946').setFontColor('#ffffff');
+  }
 }
