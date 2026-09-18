@@ -10,7 +10,7 @@ export function SurveyBarChart({ title, items, color = "#378fe7" }: { title: str
   const options = useMemo<Highcharts.Options>(() => ({
     chart: {
       type: "bar",
-      height: Math.max(300, items.length * 42 + 100),
+      height: Math.max(340, items.length * 52 + 120),
       backgroundColor: "transparent",
       spacing: [8, 12, 8, 8],
     },
@@ -21,14 +21,14 @@ export function SurveyBarChart({ title, items, color = "#378fe7" }: { title: str
       categories: items.map((item) => item.label),
       lineColor: "#dce6f0",
       tickColor: "#dce6f0",
-      labels: { style: { color: "#50657a", fontSize: "11px" } },
+      labels: { style: { color: "#405a73", fontSize: "13px" } },
     },
     yAxis: {
       min: 0,
       allowDecimals: false,
       title: { text: undefined },
       gridLineColor: "#e7eef5",
-      labels: { style: { color: "#8192a4", fontSize: "10px" } },
+      labels: { style: { color: "#6e8296", fontSize: "12px" } },
     },
     legend: { enabled: false },
     tooltip: {
@@ -50,7 +50,7 @@ export function SurveyBarChart({ title, items, color = "#378fe7" }: { title: str
           align: "left",
           crop: false,
           overflow: "allow",
-          style: { color: "#14263b", fontSize: "11px", fontWeight: "700", textOutline: "none" },
+          style: { color: "#14263b", fontSize: "13px", fontWeight: "700", textOutline: "none" },
         },
       },
     },

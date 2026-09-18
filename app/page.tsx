@@ -479,7 +479,7 @@ export default function Home() {
           </form>
         ) : (
           <div className="dashboard-view">
-            {isLoadingData && <div className="panel loading-panel">Leyendo datos del Spreadsheet...</div>}
+            {isLoadingData && <div className="panel loading-panel"><Image src="/loading.svg" alt="" width={78} height={78} priority /><div><strong>Leyendo datos</strong><span>Conectando con el Spreadsheet...</span></div></div>}
             {dataError && <div className="panel data-error" role="alert">{dataError}</div>}
 
             {!isLoadingData && !dataError && activeView === "resultados" && surveyData && (
