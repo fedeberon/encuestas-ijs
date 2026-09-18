@@ -571,6 +571,15 @@ export default function Home() {
         )}
       </section>
 
+      {isSaving && (
+        <div className="saving-overlay" role="status" aria-live="assertive" aria-label="Guardando encuesta">
+          <div className="saving-modal">
+            <Image src="/loading.svg" alt="" width={96} height={96} priority />
+            <strong>Guardando encuesta</strong>
+            <span>Esperá un momento...</span>
+          </div>
+        </div>
+      )}
       {feedback && <div className={`toast toast-${feedback.type}`} role="status"><span>{feedback.type === "success" ? "✓" : "!"}</span>{feedback.message}</div>}
     </main>
   );
