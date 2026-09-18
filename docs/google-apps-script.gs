@@ -8,12 +8,19 @@
  * 4. Implementar como aplicación web, ejecutando como propietario,
  *    con acceso para cualquiera.
  * 5. Crear una nueva versión cada vez que se actualice este código.
+ * 6. Ejecutar limpiarCaches() después de editar manualmente Instituciones,
+ *    si se necesita ver el cambio inmediatamente.
+ * 7. Ejecutar instalarTriggerCambios() una vez para invalidar la caché
+ *    automáticamente ante ediciones, altas o eliminaciones en el Spreadsheet.
  */
 
 const SPREADSHEET_ID = '1oYyGLu8wokMcWKfB4NjMl04ub2BG8BXSMFA_Se4UtaE';
 const SHEET_NAME = 'Cargas';
 const USERS_SHEET_NAME = 'Usuarios';
 const INSTITUTIONS_SHEET_NAME = 'Instituciones';
+const STATS_CACHE_KEY = 'encuestas_stats_v1';
+const INSTITUTIONS_CACHE_KEY = 'encuestas_institutions_v1';
+const CACHE_SECONDS = 300;
 
 const AREAS = [
   'Tecnología y creatividad digital',
@@ -74,7 +81,7 @@ function doGet(e) {
     if (action === 'stats') {
       return respuesta({
         ok: true,
-        stats: calcularEstadisticas(leerEncuestas())
+        stats: leerEstadisticasCacheadas()
       });
     }
 
@@ -109,8 +116,6 @@ function doPost(e) {
 
     validarEncuesta(data);
 
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const cargas = obtenerOCrearCargas(ss);
     const selected = data.selected || {};
 
     const row = [
@@ -125,8 +130,8 @@ function doPost(e) {
       data.visit || ''
     ];
 
-    cargas.appendRow(row);
-    actualizarEstadisticas(ss);
+    guardarEncuesta(row);
+    CacheService.getScriptCache().remove(STATS_CACHE_KEY);
 
     return respuesta({ ok: true, message: 'Encuesta guardada correctamente' });
   } catch (error) {
@@ -188,9 +193,29 @@ function validarEncuesta(data) {
 
 function obtenerOCrearCargas(ss) {
   let cargas = ss.getSheetByName(SHEET_NAME);
-  if (!cargas) cargas = ss.insertSheet(SHEET_NAME);
-  prepararCargas(cargas);
+  if (!cargas) {
+    cargas = ss.insertSheet(SHEET_NAME);
+    prepararCargas(cargas);
+  } else if (cargas.getLastRow() === 0) {
+    prepararCargas(cargas);
+  } else if (!cargas.getFilter()) {
+    cargas.getRange(1, 1, Math.max(cargas.getLastRow(), 2), HEADERS.length).createFilter();
+  }
   return cargas;
+}
+
+function guardarEncuesta(row) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const cargas = obtenerOCrearCargas(ss);
+    const nextRow = cargas.getLastRow() + 1;
+    cargas.getRange(nextRow, 1, 1, row.length).setValues([row]);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function prepararCargas(sheet) {
@@ -236,6 +261,10 @@ function leerEncuestas() {
 }
 
 function leerInstituciones() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(INSTITUTIONS_CACHE_KEY);
+  if (cached) return JSON.parse(cached);
+
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(INSTITUTIONS_SHEET_NAME);
   if (!sheet || sheet.getLastRow() < 2) return [];
@@ -246,7 +275,19 @@ function leerInstituciones() {
     .map(row => String(row[0] || '').trim())
     .filter(Boolean);
 
-  return [...new Set(values)];
+  const institutions = [...new Set(values)].sort((a, b) => a.localeCompare(b, 'es'));
+  cache.put(INSTITUTIONS_CACHE_KEY, JSON.stringify(institutions), CACHE_SECONDS);
+  return institutions;
+}
+
+function leerEstadisticasCacheadas() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(STATS_CACHE_KEY);
+  if (cached) return JSON.parse(cached);
+
+  const stats = calcularEstadisticas(leerEncuestas());
+  cache.put(STATS_CACHE_KEY, JSON.stringify(stats), CACHE_SECONDS);
+  return stats;
 }
 
 function obtenerOCrearInstituciones(ss) {
@@ -399,11 +440,51 @@ function respuesta(data) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+function limpiarCaches() {
+  CacheService.getScriptCache().removeAll([
+    STATS_CACHE_KEY,
+    INSTITUTIONS_CACHE_KEY
+  ]);
+}
+
+function instalarTriggerCambios() {
+  const triggers = ScriptApp.getProjectTriggers();
+
+  triggers.forEach(trigger => {
+    if (['invalidarCachePorCambio', 'invalidarCachePorEdicion'].includes(trigger.getHandlerFunction())) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  ScriptApp.newTrigger('invalidarCachePorEdicion')
+    .forSpreadsheet(SPREADSHEET_ID)
+    .onEdit()
+    .create();
+
+  ScriptApp.newTrigger('invalidarCachePorCambio')
+    .forSpreadsheet(SPREADSHEET_ID)
+    .onChange()
+    .create();
+
+  limpiarCaches();
+}
+
+function invalidarCachePorEdicion(event) {
+  limpiarCaches();
+}
+
+function invalidarCachePorCambio(event) {
+  // onChange cubre ediciones, inserción/eliminación de filas y columnas,
+  // creación/eliminación de hojas y otros cambios del Spreadsheet.
+  limpiarCaches();
+}
+
 function configurarSpreadsheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   obtenerOCrearCargas(ss);
   obtenerOCrearInstituciones(ss);
   actualizarEstadisticas(ss);
+  limpiarCaches();
 
   let users = ss.getSheetByName(USERS_SHEET_NAME);
   if (!users) users = ss.insertSheet(USERS_SHEET_NAME);

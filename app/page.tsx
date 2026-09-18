@@ -151,6 +151,7 @@ export default function Home() {
   const [institution, setInstitution] = useState("");
   const [institutions, setInstitutions] = useState<string[]>([]);
   const [institutionOpen, setInstitutionOpen] = useState(false);
+  const [institutionActiveIndex, setInstitutionActiveIndex] = useState(-1);
   const [showAllInstitutions, setShowAllInstitutions] = useState(false);
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
@@ -271,6 +272,10 @@ export default function Home() {
     if (!term) return institutions;
     return institutions.filter((item) => item.toLowerCase().includes(term));
   }, [institution, institutions, showAllInstitutions]);
+
+  const safeInstitutionActiveIndex = institutionActiveIndex >= 0 && institutionActiveIndex < filteredInstitutions.length
+    ? institutionActiveIndex
+    : -1;
 
   const exportCsv = () => {
     if (!surveyData) return;
@@ -429,17 +434,36 @@ export default function Home() {
                   role="combobox"
                   aria-expanded={institutionOpen}
                   aria-controls="institution-options"
+                  aria-activedescendant={safeInstitutionActiveIndex >= 0 ? `institution-option-${safeInstitutionActiveIndex}` : undefined}
                   aria-autocomplete="list"
                   value={institution}
-                  onChange={(event) => { setInstitution(event.target.value); setShowAllInstitutions(false); setInstitutionOpen(true); }}
+                  onChange={(event) => { setInstitution(event.target.value); setShowAllInstitutions(false); setInstitutionActiveIndex(-1); setInstitutionOpen(true); }}
                   onFocus={() => { setShowAllInstitutions(true); setInstitutionOpen(true); }}
                   onKeyDown={(event) => {
-                    if (event.key === "ArrowDown") {
+                    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                       event.preventDefault();
                       setShowAllInstitutions(true);
                       setInstitutionOpen(true);
+                      setInstitutionActiveIndex((current) => {
+                        const next = event.key === "ArrowDown" ? current + 1 : current - 1;
+                        return Math.max(0, Math.min(next, Math.max(filteredInstitutions.length - 1, 0)));
+                      });
                     }
-                    if (event.key === "Escape") setInstitutionOpen(false);
+                    if (event.key === "Enter" && institutionOpen && institutionActiveIndex >= 0) {
+                      event.preventDefault();
+                      const option = filteredInstitutions[safeInstitutionActiveIndex];
+                      if (option) {
+                        setInstitution(option);
+                        setShowAllInstitutions(true);
+                        setInstitutionOpen(false);
+                        setInstitutionActiveIndex(-1);
+                      }
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setInstitutionOpen(false);
+                      setInstitutionActiveIndex(-1);
+                    }
                   }}
                   placeholder="Buscar institución..."
                   autoComplete="off"
@@ -448,7 +472,7 @@ export default function Home() {
                 {institutionOpen && (
                   <div className="institution-options" id="institution-options" role="listbox">
                     {filteredInstitutions.length > 0 ? filteredInstitutions.map((item) => (
-                      <button key={item} type="button" role="option" aria-selected={item === institution} onMouseDown={(event) => event.preventDefault()} onClick={() => { setInstitution(item); setShowAllInstitutions(true); setInstitutionOpen(false); }}>
+                      <button key={item} id={`institution-option-${filteredInstitutions.indexOf(item)}`} type="button" role="option" aria-selected={item === institution} className={filteredInstitutions[safeInstitutionActiveIndex] === item ? "institution-option-active" : undefined} onMouseDown={(event) => event.preventDefault()} onClick={() => { setInstitution(item); setShowAllInstitutions(true); setInstitutionOpen(false); setInstitutionActiveIndex(-1); }}>
                         {item}
                       </button>
                     )) : <span className="institution-empty">No hay instituciones coincidentes</span>}
