@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 const interestAreas = [
   "Tecnología y creatividad digital",
@@ -44,6 +44,25 @@ const groups = [
   { number: "02", title: "Carreras / temas de interés", options: careerTopics },
   { number: "03", title: "Qué valora en una carrera", options: careerValues },
 ] as const;
+
+type View = "carga" | "resultados" | "estadisticas" | "exportar" | "configuracion";
+type SurveyData = { headers: string[]; rows: string[][] };
+type StatsData = {
+  total: number;
+  areas: { label: string; count: number }[];
+  carreras: { label: string; count: number }[];
+  valora: { label: string; count: number }[];
+  contact: Record<string, number>;
+  visit: Record<string, number>;
+};
+
+const viewCopy: Record<View, { title: string; subtitle: string }> = {
+  carga: { title: "Carga de encuestas", subtitle: "Ingresá las respuestas de las encuestas realizadas en papel." },
+  resultados: { title: "Resultados de encuestas", subtitle: "Consultá y buscá las respuestas cargadas en Google Sheets." },
+  estadisticas: { title: "Estadísticas", subtitle: "Visualizá los principales indicadores de las encuestas." },
+  exportar: { title: "Exportar datos", subtitle: "Descargá una copia de las respuestas para trabajarla localmente." },
+  configuracion: { title: "Configuración", subtitle: "Información de la conexión con el Spreadsheet." },
+};
 
 function OptionGroup({
   number,
@@ -91,6 +110,12 @@ export default function Home() {
   const [count, setCount] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [activeView, setActiveView] = useState<View>("carga");
+  const [surveyData, setSurveyData] = useState<SurveyData | null>(null);
+  const [statsData, setStatsData] = useState<StatsData | null>(null);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [dataError, setDataError] = useState("");
+  const [search, setSearch] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -125,6 +150,45 @@ export default function Home() {
 
   const toggleSelection = (option: Selection) => {
     setSelected((current) => ({ ...current, [option]: !current[option] }));
+  };
+
+  const loadData = async (view: View) => {
+    setActiveView(view);
+    if (view === "carga" || view === "configuracion" || (view === "exportar" && surveyData)) return;
+    setIsLoadingData(true);
+    setDataError("");
+    try {
+      const action = view === "estadisticas" ? "stats" : "surveys";
+      const response = await fetch(`/api/surveys?action=${action}`, { cache: "no-store" });
+      const result = (await response.json().catch(() => ({}))) as SurveyData & StatsData & { error?: string };
+      if (!response.ok) throw new Error(result.error || "No se pudieron leer los datos");
+      if (action === "stats") setStatsData(result);
+      else setSurveyData(result);
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "No se pudieron leer los datos");
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  const filteredRows = useMemo(() => {
+    if (!surveyData) return [];
+    const term = search.trim().toLowerCase();
+    if (!term) return surveyData.rows;
+    return surveyData.rows.filter((row) => row.slice(0, 4).join(" ").toLowerCase().includes(term));
+  }, [search, surveyData]);
+
+  const exportCsv = () => {
+    if (!surveyData) return;
+    const csv = [surveyData.headers, ...surveyData.rows]
+      .map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(","))
+      .join("\n");
+    const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `encuestas-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
@@ -200,26 +264,26 @@ export default function Home() {
           </div>
         </div>
         <nav className="sidebar-nav" aria-label="Navegación principal">
-          <a className="nav-item nav-item-active" href="#carga">
+          <button className={`nav-item ${activeView === "carga" ? "nav-item-active" : "nav-item-muted"}`} type="button" onClick={() => loadData("carga")}>
             <span className="nav-icon" aria-hidden="true">↗</span>
             <span>Cargar encuesta</span>
-          </a>
-          <a className="nav-item nav-item-muted" href="#sesion">
+          </button>
+          <button className={`nav-item ${activeView === "resultados" ? "nav-item-active" : "nav-item-muted"}`} type="button" onClick={() => loadData("resultados")}>
             <span className="nav-icon" aria-hidden="true">▥</span>
             <span>Resultados</span>
-          </a>
-          <a className="nav-item nav-item-muted" href="#sesion">
+          </button>
+          <button className={`nav-item ${activeView === "estadisticas" ? "nav-item-active" : "nav-item-muted"}`} type="button" onClick={() => loadData("estadisticas")}>
             <span className="nav-icon" aria-hidden="true">▥</span>
             <span>Estadísticas</span>
-          </a>
-          <a className="nav-item nav-item-muted" href="#sesion">
+          </button>
+          <button className={`nav-item ${activeView === "exportar" ? "nav-item-active" : "nav-item-muted"}`} type="button" onClick={() => loadData("exportar")}>
             <span className="nav-icon" aria-hidden="true">⇧</span>
             <span>Exportar</span>
-          </a>
-          <a className="nav-item nav-item-muted" href="#sesion">
+          </button>
+          <button className={`nav-item ${activeView === "configuracion" ? "nav-item-active" : "nav-item-muted"}`} type="button" onClick={() => loadData("configuracion")}>
             <span className="nav-icon" aria-hidden="true">⚙</span>
             <span>Configuración</span>
-          </a>
+          </button>
         </nav>
         <div className="sidebar-footer">Carga manual<br /><span>Panel operativo</span></div>
       </aside>
@@ -227,9 +291,9 @@ export default function Home() {
       <section className="workspace" id="carga">
         <header className="topbar">
           <div>
-            <p className="breadcrumb">Inicio <span>/</span> Carga de encuesta</p>
-            <h1>Carga de encuestas</h1>
-            <p className="page-subtitle">Ingresá las respuestas de las encuestas realizadas en papel.</p>
+            <p className="breadcrumb">Inicio <span>/</span> {viewCopy[activeView].title}</p>
+            <h1>{viewCopy[activeView].title}</h1>
+            <p className="page-subtitle">{viewCopy[activeView].subtitle}</p>
           </div>
           <div className="session-counter" id="sesion" aria-live="polite">
             <span className="counter-icon" aria-hidden="true">▣</span>
@@ -237,7 +301,8 @@ export default function Home() {
           </div>
         </header>
 
-        <form className="entry-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
+        {activeView === "carga" ? (
+          <form className="entry-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
         <section className="panel respondent-panel">
           <div className="section-heading respondent-heading">
             <span className="section-number">00</span>
@@ -333,7 +398,54 @@ export default function Home() {
             </button>
           </div>
         </footer>
-        </form>
+          </form>
+        ) : (
+          <div className="dashboard-view">
+            {isLoadingData && <div className="panel loading-panel">Leyendo datos del Spreadsheet...</div>}
+            {dataError && <div className="panel data-error" role="alert">{dataError}</div>}
+
+            {!isLoadingData && !dataError && activeView === "resultados" && surveyData && (
+              <section className="panel data-panel">
+                <div className="data-panel-header">
+                  <div><h2>Detalle de respuestas</h2><p>{filteredRows.length} de {surveyData.rows.length} encuestas</p></div>
+                  <input className="search-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por institución, nombre o apellido..." aria-label="Buscar encuestas" />
+                </div>
+                <div className="table-scroll">
+                  <table className="results-table">
+                    <thead><tr><th>#</th><th>Institución</th><th>Nombre</th><th>Apellido</th><th>Áreas de interés</th><th>Carreras</th><th>Contacto</th><th>Jornada</th><th>Fecha</th></tr></thead>
+                    <tbody>
+                      {filteredRows.map((row, index) => {
+                        const areas = row.slice(4, 9).map((value, optionIndex) => value ? interestAreas[optionIndex] : "").filter(Boolean).join(", ");
+                        const careers = row.slice(9, 18).map((value, optionIndex) => value ? careerTopics[optionIndex] : "").filter(Boolean).join(", ");
+                        return <tr key={`${row[0]}-${row[1]}-${index}`}><td>{index + 1}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td><td>{areas || "—"}</td><td>{careers || "—"}</td><td>{row[25] || "—"}</td><td>{row[26] || "—"}</td><td>{row[0]}</td></tr>;
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {filteredRows.length === 0 && <p className="empty-state">No hay encuestas que coincidan con la búsqueda.</p>}
+              </section>
+            )}
+
+            {!isLoadingData && !dataError && activeView === "estadisticas" && statsData && (
+              <div className="stats-dashboard">
+                <div className="stat-card stat-card-blue"><span className="stat-symbol">◉</span><div><strong>{statsData.total}</strong><span>Encuestas cargadas</span></div></div>
+                <div className="stat-card stat-card-green"><span className="stat-symbol">▥</span><div><strong>{Object.keys(statsData.contact).length}</strong><span>Canales de contacto</span></div></div>
+                <section className="panel chart-panel"><h2>Áreas de mayor interés</h2><div className="bar-list">{statsData.areas.map((item) => <div className="bar-row" key={item.label}><span>{item.label}</span><div><i style={{ width: `${statsData.total ? Math.max((item.count / statsData.total) * 100, item.count ? 3 : 0) : 0}%` }} /><b>{item.count}</b></div></div>)}</div></section>
+                <section className="panel chart-panel"><h2>Carreras de mayor interés</h2><div className="bar-list">{statsData.carreras.map((item) => <div className="bar-row" key={item.label}><span>{item.label}</span><div><i style={{ width: `${statsData.total ? Math.max((item.count / statsData.total) * 100, item.count ? 3 : 0) : 0}%` }} /><b>{item.count}</b></div></div>)}</div></section>
+                <section className="panel chart-panel"><h2>Qué valoran en una carrera</h2><div className="bar-list">{statsData.valora.map((item) => <div className="bar-row" key={item.label}><span>{item.label}</span><div><i style={{ width: `${statsData.total ? Math.max((item.count / statsData.total) * 100, item.count ? 3 : 0) : 0}%` }} /><b>{item.count}</b></div></div>)}</div></section>
+                <section className="panel chart-panel compact-stats"><h2>Contacto</h2>{Object.entries(statsData.contact).map(([label, value]) => <div className="summary-row" key={label}><span>{label}</span><strong>{value}</strong></div>)}<h2 className="secondary-heading">Jornada informativa</h2>{Object.entries(statsData.visit).map(([label, value]) => <div className="summary-row" key={label}><span>{label}</span><strong>{value}</strong></div>)}</section>
+              </div>
+            )}
+
+            {activeView === "exportar" && (
+              <section className="panel action-panel"><div className="action-icon">⇩</div><h2>Exportar respuestas</h2><p>Descargá todas las filas de la hoja Cargas en formato CSV, compatible con Excel y Google Sheets.</p><button className="primary-button" type="button" disabled={!surveyData || isLoadingData} onClick={exportCsv}>{surveyData ? `DESCARGAR ${surveyData.rows.length} ENCUESTAS` : "CARGAR DATOS PARA EXPORTAR"}</button></section>
+            )}
+
+            {activeView === "configuracion" && (
+              <section className="panel settings-panel"><div className="settings-status"><span className="status-dot" /> Conexión configurada</div><h2>Google Sheets</h2><p>Los datos se leen desde la hoja <strong>Cargas</strong> mediante Google Apps Script. La URL permanece protegida en el servidor y no se expone al navegador.</p><dl><div><dt>Lectura</dt><dd>/api/surveys?action=surveys</dd></div><div><dt>Estadísticas</dt><dd>/api/surveys?action=stats</dd></div><div><dt>Guardado</dt><dd>/api/submit</dd></div></dl></section>
+            )}
+          </div>
+        )}
       </section>
 
       {feedback && <div className={`toast toast-${feedback.type}`} role="status"><span>{feedback.type === "success" ? "✓" : "!"}</span>{feedback.message}</div>}
