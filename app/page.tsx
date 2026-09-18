@@ -48,7 +48,7 @@ const groups = [
 ] as const;
 
 type View = "carga" | "resultados" | "estadisticas" | "exportar" | "configuracion";
-type SurveyData = { headers: string[]; rows: string[][] };
+type SurveyData = { headers: string[]; rows: string[][]; rowNumbers?: number[] };
 type InstitutionsData = { institutions?: string[] };
 type StatsData = {
   total: number;
@@ -167,6 +167,8 @@ export default function Home() {
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [dataError, setDataError] = useState("");
   const [search, setSearch] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<{ rowNumber: number; row: string[] } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [authStatus, setAuthStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
   const [currentUser, setCurrentUser] = useState<{ name: string; role: string } | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -260,10 +262,14 @@ export default function Home() {
   };
 
   const filteredRows = useMemo(() => {
-    if (!surveyData) return [];
+    if (!surveyData) return [] as { row: string[]; rowNumber: number }[];
     const term = search.trim().toLowerCase();
-    if (!term) return surveyData.rows;
-    return surveyData.rows.filter((row) => row.slice(0, 4).join(" ").toLowerCase().includes(term));
+    const rows = surveyData.rows.map((row, index) => ({
+      row,
+      rowNumber: surveyData.rowNumbers?.[index] ?? index + 2,
+    }));
+    if (!term) return rows;
+    return rows.filter(({ row }) => row.slice(0, 4).join(" ").toLowerCase().includes(term));
   }, [search, surveyData]);
 
   const filteredInstitutions = useMemo(() => {
@@ -294,6 +300,33 @@ export default function Home() {
     await fetch("/api/auth/logout", { method: "POST" });
     setCurrentUser(null);
     setAuthStatus("unauthenticated");
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete || isDeleting) return;
+
+    setIsDeleting(true);
+    setFeedback(null);
+    try {
+      const response = await fetch("/api/surveys", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowNumber: pendingDelete.rowNumber, expected: pendingDelete.row.slice(0, 4) }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(result.error || "No se pudo eliminar el registro.");
+
+      setPendingDelete(null);
+      setFeedback({ type: "success", message: "Registro eliminado" });
+      await loadData("resultados");
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "No se pudo eliminar el registro.",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
@@ -570,12 +603,12 @@ export default function Home() {
                 </div>
                 <div className="table-scroll">
                   <table className="results-table">
-                    <thead><tr><th>#</th><th>Institución</th><th>Nombre</th><th>Apellido</th><th>Áreas de interés</th><th>Carreras</th><th>Contacto</th><th>Jornada</th><th>Fecha</th></tr></thead>
+                    <thead><tr><th>#</th><th>Institución</th><th>Nombre</th><th>Apellido</th><th>Áreas de interés</th><th>Carreras</th><th>Contacto</th><th>Jornada</th><th>Fecha</th><th>Acciones</th></tr></thead>
                     <tbody>
-                      {filteredRows.map((row, index) => {
+                      {filteredRows.map(({ row, rowNumber }, index) => {
                         const areas = row.slice(4, 9).map((value, optionIndex) => value ? interestAreas[optionIndex] : "").filter(Boolean).join(", ");
                         const careers = row.slice(9, 18).map((value, optionIndex) => value ? careerTopics[optionIndex] : "").filter(Boolean).join(", ");
-                        return <tr key={`${row[0]}-${row[1]}-${index}`}><td>{index + 1}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td><td>{areas || "—"}</td><td>{careers || "—"}</td><td>{row[25] || "—"}</td><td>{row[26] || "—"}</td><td>{row[0]}</td></tr>;
+                        return <tr key={`${rowNumber}-${row[0]}-${index}`}><td>{index + 1}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td><td>{areas || "—"}</td><td>{careers || "—"}</td><td>{row[25] || "—"}</td><td>{row[26] || "—"}</td><td>{row[0]}</td><td><button className="table-delete-button" type="button" onClick={() => setPendingDelete({ rowNumber, row })}>Eliminar</button></td></tr>;
                       })}
                     </tbody>
                   </table>
@@ -613,6 +646,20 @@ export default function Home() {
             <strong>Guardando encuesta</strong>
             <span>Esperá un momento...</span>
           </div>
+        </div>
+      )}
+      {pendingDelete && (
+        <div className="delete-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !isDeleting) setPendingDelete(null); }}>
+          <section className="delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+            <div className="delete-modal-icon" aria-hidden="true">!</div>
+            <p className="delete-modal-kicker">ACCIÓN IRREVERSIBLE</p>
+            <h2 id="delete-modal-title">¿Querés eliminar este registro?</h2>
+            <p className="delete-modal-description">La encuesta de <strong>{pendingDelete.row[2]} {pendingDelete.row[3]}</strong> de <strong>{pendingDelete.row[1]}</strong> se eliminará de Google Sheets.</p>
+            <div className="delete-modal-actions">
+              <button className="secondary-button" type="button" disabled={isDeleting} onClick={() => setPendingDelete(null)}>Cancelar</button>
+              <button className="delete-confirm-button" type="button" disabled={isDeleting} onClick={handleDelete}>{isDeleting ? "Eliminando..." : "Sí, eliminar registro"}</button>
+            </div>
+          </section>
         </div>
       )}
       {feedback && <div className={`toast toast-${feedback.type}`} role="status"><span>{feedback.type === "success" ? "✓" : "!"}</span>{feedback.message}</div>}

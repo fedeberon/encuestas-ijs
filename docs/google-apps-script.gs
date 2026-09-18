@@ -71,10 +71,12 @@ function doGet(e) {
       : 'health';
 
     if (action === 'surveys') {
+      const rows = leerEncuestas();
       return respuesta({
         ok: true,
         headers: HEADERS,
-        rows: leerEncuestas()
+        rows,
+        rowNumbers: rows.map((row, index) => index + 2)
       });
     }
 
@@ -112,6 +114,10 @@ function doPost(e) {
 
     if (data.action === 'login') {
       return autenticarUsuario(data);
+    }
+
+    if (data.action === 'delete') {
+      return eliminarEncuesta(data);
     }
 
     validarEncuesta(data);
@@ -188,6 +194,39 @@ function validarEncuesta(data) {
 
   if (!data.selected || typeof data.selected !== 'object') {
     throw new Error('La selección de respuestas es inválida.');
+  }
+}
+
+function eliminarEncuesta(data) {
+  const rowNumber = Number(data && data.rowNumber);
+  if (!Number.isInteger(rowNumber) || rowNumber < 2) {
+    throw new Error('El registro seleccionado no es válido.');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const cargas = ss.getSheetByName(SHEET_NAME);
+    if (!cargas || rowNumber > cargas.getLastRow()) {
+      throw new Error('El registro ya no existe o fue eliminado previamente.');
+    }
+
+    const expected = Array.isArray(data.expected) ? data.expected.slice(0, 4).map(value => String(value)) : [];
+    if (expected.length === 4) {
+      const current = cargas.getRange(rowNumber, 1, 1, 4).getDisplayValues()[0];
+      const sameRecord = expected.every((value, index) => String(current[index]).trim() === value.trim());
+      if (!sameRecord) {
+        throw new Error('El registro cambió o ya fue eliminado. Actualizá la tabla e intentá nuevamente.');
+      }
+    }
+
+    cargas.deleteRow(rowNumber);
+    limpiarCaches();
+    return respuesta({ ok: true, message: 'Encuesta eliminada correctamente' });
+  } finally {
+    lock.releaseLock();
   }
 }
 
