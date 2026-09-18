@@ -150,6 +150,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: { name: string; role: string
 export default function Home() {
   const [institution, setInstitution] = useState("");
   const [institutions, setInstitutions] = useState<string[]>([]);
+  const [institutionOpen, setInstitutionOpen] = useState(false);
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
   const [selected, setSelected] = useState<SelectedState>(emptySelections);
@@ -167,6 +168,7 @@ export default function Home() {
   const [authStatus, setAuthStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
   const [currentUser, setCurrentUser] = useState<{ name: string; role: string } | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+  const institutionComboRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const savedInstitution = window.localStorage.getItem("encuesta-institution");
@@ -198,6 +200,15 @@ export default function Home() {
   useEffect(() => {
     if (institution.trim()) window.localStorage.setItem("encuesta-institution", institution);
   }, [institution]);
+
+  useEffect(() => {
+    if (!institutionOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!institutionComboRef.current?.contains(event.target as Node)) setInstitutionOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [institutionOpen]);
 
   useEffect(() => {
     if (!feedback) return;
@@ -252,6 +263,12 @@ export default function Home() {
     if (!term) return surveyData.rows;
     return surveyData.rows.filter((row) => row.slice(0, 4).join(" ").toLowerCase().includes(term));
   }, [search, surveyData]);
+
+  const filteredInstitutions = useMemo(() => {
+    const term = institution.trim().toLowerCase();
+    if (!term) return institutions;
+    return institutions.filter((item) => item.toLowerCase().includes(term));
+  }, [institution, institutions]);
 
   const exportCsv = () => {
     if (!surveyData) return;
@@ -404,17 +421,29 @@ export default function Home() {
           <div className="respondent-fields">
             <label className="field institution-field" htmlFor="institution">
               <span>Institución <em>*</em></span>
-              <input
-                id="institution"
-                value={institution}
-                onChange={(event) => setInstitution(event.target.value)}
-                placeholder="Institución / sede"
-                autoComplete="organization"
-                list="institution-options"
-              />
-              <datalist id="institution-options">
-                {institutions.map((item) => <option key={item} value={item} />)}
-              </datalist>
+              <div className="institution-combo" ref={institutionComboRef}>
+                <input
+                  id="institution"
+                  role="combobox"
+                  aria-expanded={institutionOpen}
+                  aria-controls="institution-options"
+                  value={institution}
+                  onChange={(event) => { setInstitution(event.target.value); setInstitutionOpen(true); }}
+                  onFocus={() => setInstitutionOpen(true)}
+                  placeholder="Buscar institución..."
+                  autoComplete="off"
+                />
+                <button className="combo-toggle" type="button" aria-label="Mostrar instituciones" onMouseDown={(event) => event.preventDefault()} onClick={() => setInstitutionOpen((open) => !open)}>⌄</button>
+                {institutionOpen && (
+                  <div className="institution-options" id="institution-options" role="listbox">
+                    {filteredInstitutions.length > 0 ? filteredInstitutions.map((item) => (
+                      <button key={item} type="button" role="option" aria-selected={item === institution} onMouseDown={(event) => event.preventDefault()} onClick={() => { setInstitution(item); setInstitutionOpen(false); }}>
+                        {item}
+                      </button>
+                    )) : <span className="institution-empty">No hay instituciones coincidentes</span>}
+                  </div>
+                )}
+              </div>
               <small>{institutions.length ? "Elegí de la lista o escribí una nueva. Se conserva para la próxima encuesta" : "Se conserva para la próxima encuesta"}</small>
             </label>
             <label className="field" htmlFor="name">
