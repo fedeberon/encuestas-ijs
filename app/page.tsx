@@ -218,10 +218,14 @@ export default function Home() {
     try {
       const action = view === "estadisticas" ? "stats" : "surveys";
       const response = await fetch(`/api/surveys?action=${action}`, { cache: "no-store" });
-      const result = (await response.json().catch(() => ({}))) as SurveyData & StatsData & { error?: string };
+      const result = (await response.json().catch(() => ({}))) as SurveyData & { stats?: StatsData; error?: string };
       if (!response.ok) throw new Error(result.error || "No se pudieron leer los datos");
-      if (action === "stats") setStatsData(result);
-      else setSurveyData(result);
+      if (action === "stats") {
+        if (!result.stats) throw new Error("La respuesta de estadísticas es inválida.");
+        setStatsData(result.stats);
+      } else {
+        setSurveyData(result);
+      }
     } catch (error) {
       setDataError(error instanceof Error ? error.message : "No se pudieron leer los datos");
     } finally {
