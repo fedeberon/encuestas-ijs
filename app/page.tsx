@@ -151,6 +151,7 @@ export default function Home() {
   const [institution, setInstitution] = useState("");
   const [institutions, setInstitutions] = useState<string[]>([]);
   const [institutionOpen, setInstitutionOpen] = useState(false);
+  const [showAllInstitutions, setShowAllInstitutions] = useState(false);
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
   const [selected, setSelected] = useState<SelectedState>(emptySelections);
@@ -265,10 +266,11 @@ export default function Home() {
   }, [search, surveyData]);
 
   const filteredInstitutions = useMemo(() => {
+    if (showAllInstitutions) return institutions;
     const term = institution.trim().toLowerCase();
     if (!term) return institutions;
     return institutions.filter((item) => item.toLowerCase().includes(term));
-  }, [institution, institutions]);
+  }, [institution, institutions, showAllInstitutions]);
 
   const exportCsv = () => {
     if (!surveyData) return;
@@ -427,17 +429,26 @@ export default function Home() {
                   role="combobox"
                   aria-expanded={institutionOpen}
                   aria-controls="institution-options"
+                  aria-autocomplete="list"
                   value={institution}
-                  onChange={(event) => { setInstitution(event.target.value); setInstitutionOpen(true); }}
-                  onFocus={() => setInstitutionOpen(true)}
+                  onChange={(event) => { setInstitution(event.target.value); setShowAllInstitutions(false); setInstitutionOpen(true); }}
+                  onFocus={() => { setShowAllInstitutions(true); setInstitutionOpen(true); }}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      setShowAllInstitutions(true);
+                      setInstitutionOpen(true);
+                    }
+                    if (event.key === "Escape") setInstitutionOpen(false);
+                  }}
                   placeholder="Buscar institución..."
                   autoComplete="off"
                 />
-                <button className="combo-toggle" type="button" aria-label="Mostrar instituciones" onMouseDown={(event) => event.preventDefault()} onClick={() => setInstitutionOpen((open) => !open)}>⌄</button>
+                <button className="combo-toggle" type="button" aria-label="Mostrar todas las instituciones" onMouseDown={(event) => event.preventDefault()} onClick={() => { setShowAllInstitutions(true); setInstitutionOpen((open) => !open); }}>⌄</button>
                 {institutionOpen && (
                   <div className="institution-options" id="institution-options" role="listbox">
                     {filteredInstitutions.length > 0 ? filteredInstitutions.map((item) => (
-                      <button key={item} type="button" role="option" aria-selected={item === institution} onMouseDown={(event) => event.preventDefault()} onClick={() => { setInstitution(item); setInstitutionOpen(false); }}>
+                      <button key={item} type="button" role="option" aria-selected={item === institution} onMouseDown={(event) => event.preventDefault()} onClick={() => { setInstitution(item); setShowAllInstitutions(true); setInstitutionOpen(false); }}>
                         {item}
                       </button>
                     )) : <span className="institution-empty">No hay instituciones coincidentes</span>}
