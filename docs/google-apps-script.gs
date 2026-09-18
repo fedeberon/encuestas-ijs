@@ -10,9 +10,10 @@
  * 5. Crear una nueva versión cada vez que se actualice este código.
  */
 
-const SPREADSHEET_ID = 'REEMPLAZAR_CON_EL_ID_DEL_SPREADSHEET';
+const SPREADSHEET_ID = '1oYyGLu8wokMcWKfB4NjMl04ub2BG8BXSMFA_Se4UtaE';
 const SHEET_NAME = 'Cargas';
 const USERS_SHEET_NAME = 'Usuarios';
+const INSTITUTIONS_SHEET_NAME = 'Instituciones';
 
 const AREAS = [
   'Tecnología y creatividad digital',
@@ -77,10 +78,17 @@ function doGet(e) {
       });
     }
 
+    if (action === 'institutions') {
+      return respuesta({
+        ok: true,
+        institutions: leerInstituciones()
+      });
+    }
+
     return respuesta({
       ok: true,
       message: 'API Encuestas funcionando',
-      actions: ['health', 'surveys', 'stats']
+      actions: ['health', 'surveys', 'stats', 'institutions']
     });
   } catch (error) {
     return respuesta({ ok: false, error: error.toString() });
@@ -227,6 +235,40 @@ function leerEncuestas() {
     .getDisplayValues();
 }
 
+function leerInstituciones() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(INSTITUTIONS_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+
+  const values = sheet
+    .getRange(2, 1, sheet.getLastRow() - 1, 1)
+    .getDisplayValues()
+    .map(row => String(row[0] || '').trim())
+    .filter(Boolean);
+
+  return [...new Set(values)];
+}
+
+function obtenerOCrearInstituciones(ss) {
+  let sheet = ss.getSheetByName(INSTITUTIONS_SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(INSTITUTIONS_SHEET_NAME);
+
+  if (sheet.getLastRow() === 0) sheet.appendRow(['Institución']);
+
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1)
+    .setFontWeight('bold')
+    .setBackground('#0d2946')
+    .setFontColor('#ffffff');
+  sheet.setColumnWidth(1, 320);
+
+  if (!sheet.getFilter() && sheet.getLastRow() >= 2) {
+    sheet.getRange(1, 1, sheet.getLastRow(), 1).createFilter();
+  }
+
+  return sheet;
+}
+
 function calcularEstadisticas(rows) {
   const areaStart = 4;
   const carreraStart = areaStart + AREAS.length;
@@ -360,6 +402,7 @@ function respuesta(data) {
 function configurarSpreadsheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   obtenerOCrearCargas(ss);
+  obtenerOCrearInstituciones(ss);
   actualizarEstadisticas(ss);
 
   let users = ss.getSheetByName(USERS_SHEET_NAME);

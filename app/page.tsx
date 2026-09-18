@@ -49,6 +49,7 @@ const groups = [
 
 type View = "carga" | "resultados" | "estadisticas" | "exportar" | "configuracion";
 type SurveyData = { headers: string[]; rows: string[][] };
+type InstitutionsData = { institutions?: string[] };
 type StatsData = {
   total: number;
   areas: { label: string; count: number }[];
@@ -148,6 +149,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: { name: string; role: string
 
 export default function Home() {
   const [institution, setInstitution] = useState("");
+  const [institutions, setInstitutions] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
   const [selected, setSelected] = useState<SelectedState>(emptySelections);
@@ -181,6 +183,16 @@ export default function Home() {
 
   useEffect(() => {
     if (authStatus === "authenticated") nameRef.current?.focus();
+  }, [authStatus]);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated") return;
+    fetch("/api/surveys?action=institutions", { cache: "no-store" })
+      .then(async (response) => {
+        const result = (await response.json().catch(() => ({}))) as InstitutionsData;
+        if (response.ok && result.institutions) setInstitutions(result.institutions);
+      })
+      .catch(() => undefined);
   }, [authStatus]);
 
   useEffect(() => {
@@ -398,8 +410,12 @@ export default function Home() {
                 onChange={(event) => setInstitution(event.target.value)}
                 placeholder="Institución / sede"
                 autoComplete="organization"
+                list="institution-options"
               />
-              <small>Se conserva para la próxima encuesta</small>
+              <datalist id="institution-options">
+                {institutions.map((item) => <option key={item} value={item} />)}
+              </datalist>
+              <small>{institutions.length ? "Elegí de la lista o escribí una nueva. Se conserva para la próxima encuesta" : "Se conserva para la próxima encuesta"}</small>
             </label>
             <label className="field" htmlFor="name">
               <span>Nombre <em>*</em></span>

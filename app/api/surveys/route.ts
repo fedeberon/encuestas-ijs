@@ -8,6 +8,7 @@ type AppsScriptResponse = {
   error?: string;
   headers?: string[];
   rows?: string[][];
+  institutions?: string[];
   stats?: {
     total: number;
     areas: { label: string; count: number }[];
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
   }
 
   const action = new URL(request.url).searchParams.get("action") || "surveys";
-  if (!new Set(["surveys", "stats", "health"]).has(action)) {
+  if (!new Set(["surveys", "stats", "institutions", "health"]).has(action)) {
     return NextResponse.json({ error: "Acción inválida." }, { status: 400 });
   }
 
